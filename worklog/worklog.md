@@ -104,6 +104,11 @@ On vois que toute c'est action commence par "esc[".
 
 Nous pouvons utiliser c'est commande avec la fonction kprintf et le code dans la chaine e carractere, par exemple pour effacer l'ecran "kprintf("\033[2J\033[H");".
 
+*console.c*
+
+Pour implementer la premiere version de console.c j'ai ajouter un etat pour gere les ligne de commande, et un buffer pour stocker les caractere de la ligne en cours.
+Les fonction envoye les caractere a la console, et certainne attende des caractere en retours, en particulier la fonction cursor_position qui attend de recevoir les coordonner du curseur. Cette attente est bloquante car on restent dans celle si temps que l'on a pas recu entierement les coordonner du curseur.
+
 
 ## consigne
 - [Understanding the execution](./execution.md)
