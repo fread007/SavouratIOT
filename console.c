@@ -1,9 +1,11 @@
 #include "main.h"
 #include "uart.h"
+#include "isr.h"
 
 static void (*line_callback)(char*) = NULL;
 static char input_buffer[1024];
 static int buffer_pos = 0;
+static char tmp = ' '; 
 
 //deplace le curseur d'une position vers la gauche, droite, haut ou bas
 void cursor_left(){
@@ -168,12 +170,27 @@ void console_echo(uint8_t byte){
         return;
     }
 }
+
+char chars[8]= { '|', '/', '-', '\\', '|', '/', '-', '\\', };
+uint8_t pos = 0;
+
+void funny_cursor(uint8_t vide) {
+    pos = (pos + 1) % 8;
+    kprintf("\b%c", chars[pos]);
+}
 void _start() {
-  console_init(NULL);
-  while (1) {
-    uint8_t c;
-    if (0==uart_receive(UART0,&c))
-      continue;
-    console_echo(c);
-  }
+    console_init(NULL);
+    cursor_hide();
+    irqs_setup();
+    irqs_enable();
+    mmio_write32(UART0, 0x38, (1 << 4));
+    // a revoire j'ai pas compris comment configurer le timer
+    mmio_write32((void*)0x101E2000, 0x08, 0);
+    mmio_write32((void*)0x101E2000, 0x00, 100000);
+    mmio_write32((void*)0x101E2000, 0x08, 0xE2);
+    irq_enable(UART0_IRQ, (void(*)(uint32_t, void*))console_echo, NULL);
+    irq_enable(TIMER0_IRQ, (void(*)(uint32_t, void*))funny_cursor, NULL);
+    while (1) {
+        wfi();
+    }
 }
