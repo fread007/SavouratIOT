@@ -58,13 +58,11 @@ void irq_handler(void) {
     uint32_t status = mmio_read32((void*)VIC_BASE_ADDR, 0x00);
 
     if (status & (1 << UART0_IRQ)) {
-        
+        mmio_write32(UART0, 0x44, (1 << 4)); 
         if (irq_handlers[UART0_IRQ].callback != NULL) {
-            uint8_t c;
-            if (uart_receive(UART0, &c)) { 
-                irq_handlers[UART0_IRQ].callback(c, irq_handlers[UART0_IRQ].cookie);
-            }
+            irq_handlers[UART0_IRQ].callback(0, irq_handlers[UART0_IRQ].cookie);
         }
+        
     }
 
     if(status & (1 << TIMER0_IRQ)) {

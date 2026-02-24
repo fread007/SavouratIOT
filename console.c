@@ -1,6 +1,7 @@
 #include "main.h"
 #include "uart.h"
 #include "isr.h"
+#include "ring.h"   
 
 static void (*line_callback)(char*) = NULL;
 static char input_buffer[1024];
@@ -96,26 +97,37 @@ void console_init(void (*callback)(char*)) {
     cursor_show();
 }
 
+
+void uart_handler(uint8_t cookie) {
+    uint8_t c;
+    while(0 != uart_receive(UART0, &c)){
+        if(!ring_full()) {
+            ring_put(c);
+        }
+    }
+}
+
+
+uint8_t state = 0;
+
 // gère les entrées clavier et les commande spéciales
 void console_echo(uint8_t byte){
-
-    static uint8_t state = 0; // 0: normal, 1: ESC reçu, 2: ESC[ reçu
-
-    if (state == 0 && byte == '\033') { // ESC : debut d'une commande spéciale
-        state = 1;
-        return;
-    }
-
-    if (state == 1) {
-        if (byte == '[') {
+    switch (state)
+    {
+    case 0:
+        if (byte == '\033') { // ESC : debut d'une commande spéciale
+            state = 1;
+            return;
+        }
+        break;
+    case 1:
+        if(byte == '[') {
             state = 2;
             return;
         }
         state = 0;
-        return;
-    }
-
-    if (state == 2) {
+        break;
+    case 2:
         state = 0;
         switch(byte) {
             case 'A': 
@@ -131,7 +143,9 @@ void console_echo(uint8_t byte){
                 cursor_left(); 
                 return;
         }
-        return; // Si ce n'est pas une commande de déplacement
+        break;
+    default:
+        break;
     }
     
     if (byte == 3) { // ESC[\3 = Ctrl+C : efface la ligne en cours
@@ -178,19 +192,27 @@ void funny_cursor(uint8_t vide) {
     pos = (pos + 1) % 8;
     kprintf("\b%c", chars[pos]);
 }
+
 void _start() {
     console_init(NULL);
-    cursor_hide();
+    //cursor_hide();
     irqs_setup();
     irqs_enable();
     mmio_write32(UART0, 0x38, (1 << 4));
-    // a revoire j'ai pas compris comment configurer le timer
-    mmio_write32((void*)0x101E2000, 0x08, 0);
-    mmio_write32((void*)0x101E2000, 0x00, 100000);
-    mmio_write32((void*)0x101E2000, 0x08, 0xE2);
-    irq_enable(UART0_IRQ, (void(*)(uint32_t, void*))console_echo, NULL);
-    irq_enable(TIMER0_IRQ, (void(*)(uint32_t, void*))funny_cursor, NULL);
+    irq_enable(UART0_IRQ, (void(*)(uint8_t, void*))uart_handler, NULL);
     while (1) {
-        wfi();
+        if(!ring_empty()) {
+            uint8_t c = ring_get();
+            console_echo(c);
+        }
+        irqs_disable();
+        if(ring_empty()) {
+            wfi();
+            irqs_enable();
+        }
+        else{
+            irqs_enable();
+        }
     }
 }
+
