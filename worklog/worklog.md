@@ -125,4 +125,13 @@ Dans la boucle while on fait passer le temps en enlever 1 au temps de tretement,
 
 Dans le fichier console.c on y trouve la boucle principal du programme, ainsi que le handler et la gestion de l'interuption UART0. Une fois cette interuption relevé on peut dans la boucle principal lire les caractere qui on etais recut.
 Afin de limiter le temps dans le handler (car les interuption sont bloquer a ce moment) on ajoute les caractere recut a une ring mais on ne les traite pas. 
-Dans le fichier isr.c la fonction principal est appeler quand une interuption est releve, il y est deduit de quelle interuption on parle et ou continuer l'execution (quelle handler est associer a cette interuption). Ensuite on marque que 'on a traiter l'interuption, pour l'UART0 un bit est dedier a cella dans le composant, et on le notife aussi au VIC.
+Dans le fichier isr.c la fonction principal est appeler quand une interuption est releve, il y est deduit de quelle interuption on parle et ou continuer l'execution (quelle handler est associer a cette interuption). Ensuite on marque qu'on a traiter l'interuption, pour l'UART0 un bit est dedier a cella dans le composant, et on le notife aussi au VIC.
+
+*TIMER*
+J'ai ajouter une interuption timer qui change la couleur du text et du badground afin d'ajouter une desieme interuption. Pour celle si il a fallut rensegner la duree du timer et mettre des bits a 1 permetant de specifié certain parametre :
+- debuter les interuption
+- debuter le timer
+- le definire comme periodique
+
+le handler quand a lui est juste un changement de valeur d'un boolean, on ne verifie pas qu'il est deja la veleur a 1 car si on a 2 interuption de changement de couleur alors que la 1er na pas etais treter on ne shouaite que changer une fois.
+Dans la boucle principal j'ai ajouter une verification de ce boolean, qui si egal a 1 appel la fonction funny cursor.

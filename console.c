@@ -6,6 +6,8 @@
 
 //******************************handler********************************
 
+bool_t change_color = 0;
+
 // fonction d'interruption de l'UART0 qui vas stoquer tou les les caractères reçus dans une ring
 void uart_handler(uint8_t cookie) {
     uint8_t c;
@@ -14,6 +16,10 @@ void uart_handler(uint8_t cookie) {
             ring_put(c);
         }
     }
+}
+
+void timer_handler(uint8_t cookie) {
+    change_color = 1;
 }
 
 
@@ -200,6 +206,7 @@ uint8_t pos = 0;
 uint8_t bgPos = 0;
 
 void funny_cursor(uint8_t vide) {
+
     pos = (pos + 1) % 8;
     bgPos = (bgPos + 3) % 8;
     console_color(color[pos]);
@@ -220,14 +227,18 @@ void _start() {
     irq_enable(UART0_IRQ, (void(*)(uint8_t, void*))uart_handler, NULL); //active l'interuption uart0 sur le VIC
 
     mmio_write32(TIMER0, 0x00, 100000); //set la valeur du timer0
-    mmio_write32(TIMER0, 0x08, ((1<<5)|(1<<7)| (1<<6))); //active les interuption timer et le timer0
-    irq_enable(TIMER0_IRQ, (void(*)(uint8_t, void*))funny_cursor, NULL); //active l'interuption timer0 sur le VIC
+    mmio_write32(TIMER0, 0x08, ((1<<5)|(1<<7)| (1<<6))); //active les interuption timer, le timer0 et le mode periodique
+    irq_enable(TIMER0_IRQ, (void(*)(uint8_t, void*))timer_handler, NULL); //active l'interuption timer0 sur le VIC
 
     //boucle incipale
     while (1) {
         if(!ring_empty()) { 
             uint8_t c = ring_get();
             console_echo(c);
+        }
+        if(change_color) {
+            change_color = 0;
+            funny_cursor(0);
         }
         irqs_disable(); //pour ne pas avoir un nouveau caractere avant de dormire
         if(ring_empty()) {
