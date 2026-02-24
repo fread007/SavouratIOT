@@ -3,6 +3,21 @@
 #include "isr.h"
 #include "ring.h"   
 
+//******************************handler********************************
+
+// fonction d'interruption de l'UART0 qui vas stoquer tou les les caractères reçus dans une ring
+void uart_handler(uint8_t cookie) {
+    uint8_t c;
+    while(0 != uart_receive(UART0, &c)){
+        if(!ring_full()) {
+            ring_put(c);
+        }
+    }
+}
+
+
+//***************************Gestion UART********************************
+
 static void (*line_callback)(char*) = NULL;
 static char input_buffer[1024];
 static int buffer_pos = 0;
@@ -98,19 +113,10 @@ void console_init(void (*callback)(char*)) {
 }
 
 
-void uart_handler(uint8_t cookie) {
-    uint8_t c;
-    while(0 != uart_receive(UART0, &c)){
-        if(!ring_full()) {
-            ring_put(c);
-        }
-    }
-}
-
-
-uint8_t state = 0;
-
 // gère les entrées clavier et les commande spéciales
+
+uint8_t state = 0;  //etats pour la gestion des commandes spéciales
+
 void console_echo(uint8_t byte){
     switch (state)
     {
@@ -185,6 +191,9 @@ void console_echo(uint8_t byte){
     }
 }
 
+//***************************Gestion Curseur********************************
+
+// gestion de l'evenement timer qui fait tourner le curseur
 char chars[8]= { '|', '/', '-', '\\', '|', '/', '-', '\\', };
 uint8_t pos = 0;
 
@@ -193,26 +202,30 @@ void funny_cursor(uint8_t vide) {
     kprintf("\b%c", chars[pos]);
 }
 
+
+//******************************main********************************/
+
+// fonction d'entrée avec la boucle principale
 void _start() {
+    //initialisation
     console_init(NULL);
     //cursor_hide();
     irqs_setup();
     irqs_enable();
-    mmio_write32(UART0, 0x38, (1 << 4));
-    irq_enable(UART0_IRQ, (void(*)(uint8_t, void*))uart_handler, NULL);
+    mmio_write32(UART0, 0x38, (1 << 4));    //active les interuption sur l'uart0
+    irq_enable(UART0_IRQ, (void(*)(uint8_t, void*))uart_handler, NULL); //active l'interuption uart0 sur le VIC
+
+    //boucle incipale
     while (1) {
-        if(!ring_empty()) {
+        if(!ring_empty()) { 
             uint8_t c = ring_get();
             console_echo(c);
         }
-        irqs_disable();
+        irqs_disable(); //pour ne pas avoir un nouveau caractere avant de dormire
         if(ring_empty()) {
             wfi();
-            irqs_enable();
         }
-        else{
-            irqs_enable();
-        }
+        irqs_enable();
     }
 }
 

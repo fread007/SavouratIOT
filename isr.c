@@ -55,22 +55,26 @@ void irq_disable(uint32_t irq) {
 }
 
 void irq_handler(void) {
+    //recupere le status des interruptions en cours
     uint32_t status = mmio_read32((void*)VIC_BASE_ADDR, 0x00);
 
+    //test si il s'agit d'une interuption UART0
     if (status & (1 << UART0_IRQ)) {
-        mmio_write32(UART0, 0x44, (1 << 4)); 
-        if (irq_handlers[UART0_IRQ].callback != NULL) {
-            irq_handlers[UART0_IRQ].callback(0, irq_handlers[UART0_IRQ].cookie);
+        mmio_write32(UART0, 0x44, (1 << 4)); //clear l'interruption dans l'uart0
+        if (irq_handlers[UART0_IRQ].callback != NULL) { //test si elle a etais activé
+            irq_handlers[UART0_IRQ].callback(0, irq_handlers[UART0_IRQ].cookie); //appel le handler associé à l'interruption uart0
         }
         
     }
 
+    //test si il s'agit d'une interuption timer0
     if(status & (1 << TIMER0_IRQ)) {
-        mmio_write32((void*)0x101E2000, 0x0C, 1);
-        if (irq_handlers[TIMER0_IRQ].callback != NULL) {
-            irq_handlers[TIMER0_IRQ].callback(0, irq_handlers[TIMER0_IRQ].cookie);
+        mmio_write32((void*)0x101E2000, 0x0C, 1); //clear l'interruption dans le timer0
+        if (irq_handlers[TIMER0_IRQ].callback != NULL) { //test si elle a etais activé
+            irq_handlers[TIMER0_IRQ].callback(0, irq_handlers[TIMER0_IRQ].cookie);   //appel le handler associé à l'interruption timer0
         }
     }
 
+    //clear l'interruption dans le VIC
     mmio_write32((void*)VIC_BASE_ADDR, 0xF00, 0);
 }

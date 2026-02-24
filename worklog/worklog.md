@@ -120,3 +120,9 @@ pour uart -> possibiliter de cree un buffer -> conflie sur le buffer
 
 console liste contien la version de console qui implemente une liste d'evenements, quand un evenement (clavier ou timer) intervient il est ajouter a une liste avec un temps de tretement,la fonction a appeler et un argument. 
 Dans la boucle while on fait passer le temps en enlever 1 au temps de tretement, on verifie si il y a un evenement a ajouter et on traite les elements a traiter.
+
+## Interuption
+
+Dans le fichier console.c on y trouve la boucle principal du programme, ainsi que le handler et la gestion de l'interuption UART0. Une fois cette interuption relevé on peut dans la boucle principal lire les caractere qui on etais recut.
+Afin de limiter le temps dans le handler (car les interuption sont bloquer a ce moment) on ajoute les caractere recut a une ring mais on ne les traite pas. 
+Dans le fichier isr.c la fonction principal est appeler quand une interuption est releve, il y est deduit de quelle interuption on parle et ou continuer l'execution (quelle handler est associer a cette interuption). Ensuite on marque que 'on a traiter l'interuption, pour l'UART0 un bit est dedier a cella dans le composant, et on le notife aussi au VIC.
