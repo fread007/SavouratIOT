@@ -2,6 +2,7 @@
 #include "uart.h"
 #include "isr.h"
 #include "ring.h"   
+#include "console.h"
 
 //******************************handler********************************
 
@@ -22,6 +23,16 @@ static void (*line_callback)(char*) = NULL;
 static char input_buffer[1024];
 static int buffer_pos = 0;
 static char tmp = ' '; 
+
+//initialise la console 
+void console_init(void (*callback)(char*)) {
+    line_callback = callback;
+    buffer_pos = 0;
+    input_buffer[0] = '\0';
+    console_clear();
+    cursor_at(0, 0);
+    cursor_show();
+}
 
 //deplace le curseur d'une position vers la gauche, droite, haut ou bas
 void cursor_left(){
@@ -101,17 +112,6 @@ void console_clear(){
     kprintf("\033[2J"); // ESC[2J : efface l'écran
     kprintf("\033[H"); // ESC[H : place le curseur en haut à gauche
 }
-
-//initialise la console 
-void console_init(void (*callback)(char*)) {
-    line_callback = callback;
-    buffer_pos = 0;
-    input_buffer[0] = '\0';
-    console_clear();
-    cursor_at(0, 0);
-    cursor_show();
-}
-
 
 // gère les entrées clavier et les commande spéciales
 
@@ -194,12 +194,16 @@ void console_echo(uint8_t byte){
 //***************************Gestion Curseur********************************
 
 // gestion de l'evenement timer qui fait tourner le curseur
-char chars[8]= { '|', '/', '-', '\\', '|', '/', '-', '\\', };
+uint32_t color[] = {BLACK ,RED ,GREEN ,YELLOW ,BLUE ,MAGENTA ,CYAN ,WHITE};
+uint32_t bgColor[] = {BG_BLACK ,BG_RED ,BG_GREEN ,BG_YELLOW ,BG_BLUE ,BG_MAGENTA ,BG_CYAN ,BG_WHITE};
 uint8_t pos = 0;
+uint8_t bgPos = 0;
 
 void funny_cursor(uint8_t vide) {
     pos = (pos + 1) % 8;
-    kprintf("\b%c", chars[pos]);
+    bgPos = (bgPos + 3) % 8;
+    console_color(color[pos]);
+    console_color(bgColor[bgPos]);
 }
 
 
@@ -214,6 +218,10 @@ void _start() {
     irqs_enable();
     mmio_write32(UART0, 0x38, (1 << 4));    //active les interuption sur l'uart0
     irq_enable(UART0_IRQ, (void(*)(uint8_t, void*))uart_handler, NULL); //active l'interuption uart0 sur le VIC
+
+    mmio_write32(TIMER0, 0x00, 100000); //set la valeur du timer0
+    mmio_write32(TIMER0, 0x08, ((1<<5)|(1<<7)| (1<<6))); //active les interuption timer et le timer0
+    irq_enable(TIMER0_IRQ, (void(*)(uint8_t, void*))funny_cursor, NULL); //active l'interuption timer0 sur le VIC
 
     //boucle incipale
     while (1) {

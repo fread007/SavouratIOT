@@ -3,6 +3,7 @@
 #include "main.h"
 #include "uart.h"
 #include <stddef.h>
+#include "console.h"
 
 // Declaration des fonctions d'assembleur
 extern void _irqs_setup();
@@ -69,7 +70,7 @@ void irq_handler(void) {
 
     //test si il s'agit d'une interuption timer0
     if(status & (1 << TIMER0_IRQ)) {
-        mmio_write32((void*)0x101E2000, 0x0C, 1); //clear l'interruption dans le timer0
+        mmio_write32(TIMER0, 0x0C, 1); //clear l'interruption dans le timer0
         if (irq_handlers[TIMER0_IRQ].callback != NULL) { //test si elle a etais activé
             irq_handlers[TIMER0_IRQ].callback(0, irq_handlers[TIMER0_IRQ].cookie);   //appel le handler associé à l'interruption timer0
         }

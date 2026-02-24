@@ -79,6 +79,9 @@
 #define BG_CYAN (CYAN+10)
 #define BG_WHITE (WHITE+10)
 
+
+#define TIMER0 0x101E2000
+
 /*
  * Functions to move the cursor from its current position
  */
