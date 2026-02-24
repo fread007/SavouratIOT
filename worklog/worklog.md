@@ -110,7 +110,13 @@ Pour implementer la premiere version de console.c j'ai ajouter un etat pour gere
 Les fonction envoye les caractere a la console, et certainne attende des caractere en retours, en particulier la fonction cursor_position qui attend de recevoir les coordonner du curseur. Cette attente est bloquante car on restent dans celle si temps que l'on a pas recu entierement les coordonner du curseur.
 
 
-## consigne
-- [Understanding the execution](./execution.md)
-- [Advanced debugging](./debugging.md)
+boucle "_start" de base qui ne fait rien a part initialiser le programme, le travaille est fait dans les handler.
+attention de ce qu'il y a dans le handler -> il ne faut pas que sa dure -> enleveer du handler la partie complexe en dehors.
+pour uart -> possibiliter de cree un buffer -> conflie sur le buffer
+            -> possibilter de cree une liste (ajout a la fin enleve au debut) -> probleme de concurence
+            -> interompe les interuction le temps du'une section (halt reactive les interuption) -> probleme alocation memoire n'est pas en section critique -> solution bien implementer une ring/cercular buffer (structure donée) !pas de out sans full et pas de get sans empty!
 
+*consoleListe*
+
+console liste contien la version de console qui implemente une liste d'evenements, quand un evenement (clavier ou timer) intervient il est ajouter a une liste avec un temps de tretement,la fonction a appeler et un argument. 
+Dans la boucle while on fait passer le temps en enlever 1 au temps de tretement, on verifie si il y a un evenement a ajouter et on traite les elements a traiter.

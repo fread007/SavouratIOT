@@ -1,11 +1,62 @@
 #include "main.h"
 #include "uart.h"
-#include "isr.h"
 
 static void (*line_callback)(char*) = NULL;
 static char input_buffer[1024];
 static int buffer_pos = 0;
-static char tmp = ' '; 
+typedef struct {
+    void (*callback)(uint32_t, void*);
+    int time;
+    uint32_t cookie;
+} event_t;
+
+static event_t events[100];
+static int event_count = 0;
+
+void ajouter_event(uint32_t delay, void (*callback)(uint32_t, void*),uint32_t cookie) {
+    if (event_count >= 100) {
+        return;
+    }
+
+    int insert_pos = event_count;
+    for (int i = 0; i < event_count; i++) {
+        if (events[i].time > (int)delay) {
+            insert_pos = i;
+            break;
+        }
+    }
+
+    for (int j = event_count; j > insert_pos; j--) {
+        events[j] = events[j - 1];
+    }
+
+    events[insert_pos].callback = callback;
+    events[insert_pos].time = (int)delay;
+    events[insert_pos].cookie = cookie;
+    event_count++;
+}
+
+void time_step() {
+    for (int i = 0; i < event_count; i++) {
+        if (events[i].time > 0) {
+            events[i].time--;
+        }
+    }
+}
+
+void executer_events() {
+    for (int i = 0; i < event_count; i++) {
+        if (events[i].time == 0) {
+            events[i].callback(events[i].cookie, NULL);
+            for (int j = i; j < event_count - 1; j++) {
+                events[j] = events[j + 1];
+            }
+            event_count--;
+            i--;
+        }
+    }
+}
+
 
 //deplace le curseur d'une position vers la gauche, droite, haut ou bas
 void cursor_left(){
@@ -96,26 +147,26 @@ void console_init(void (*callback)(char*)) {
     cursor_show();
 }
 
+uint8_t state = 0;
+
 // gère les entrées clavier et les commande spéciales
 void console_echo(uint8_t byte){
-
-    static uint8_t state = 0; // 0: normal, 1: ESC reçu, 2: ESC[ reçu
-
-    if (state == 0 && byte == '\033') { // ESC : debut d'une commande spéciale
-        state = 1;
-        return;
-    }
-
-    if (state == 1) {
-        if (byte == '[') {
+    switch (state)
+    {
+    case 0:
+        if (byte == '\033') { // ESC : debut d'une commande spéciale
+            state = 1;
+            return;
+        }
+        break;
+    case 1:
+        if(byte == '[') {
             state = 2;
             return;
         }
         state = 0;
-        return;
-    }
-
-    if (state == 2) {
+        break;
+    case 2:
         state = 0;
         switch(byte) {
             case 'A': 
@@ -131,7 +182,9 @@ void console_echo(uint8_t byte){
                 cursor_left(); 
                 return;
         }
-        return; // Si ce n'est pas une commande de déplacement
+        break;
+    default:
+        break;
     }
     
     if (byte == 3) { // ESC[\3 = Ctrl+C : efface la ligne en cours
@@ -171,26 +224,30 @@ void console_echo(uint8_t byte){
     }
 }
 
+uint32_t cursor_timer = 0;
 char chars[8]= { '|', '/', '-', '\\', '|', '/', '-', '\\', };
 uint8_t pos = 0;
 
-void funny_cursor(uint8_t vide) {
+void funny_cursor(uint32_t cookie, void* data) {
     pos = (pos + 1) % 8;
     kprintf("\b%c", chars[pos]);
+    ajouter_event(500000, funny_cursor, 0);
 }
+
+void console_echo_event(uint32_t cookie, void* data) {
+        (void)data;
+        console_echo((uint8_t)cookie);
+}
+
 void _start() {
     console_init(NULL);
-    cursor_hide();
-    irqs_setup();
-    irqs_enable();
-    mmio_write32(UART0, 0x38, (1 << 4));
-    // a revoire j'ai pas compris comment configurer le timer
-    mmio_write32((void*)0x101E2000, 0x08, 0);
-    mmio_write32((void*)0x101E2000, 0x00, 100000);
-    mmio_write32((void*)0x101E2000, 0x08, 0xE2);
-    irq_enable(UART0_IRQ, (void(*)(uint32_t, void*))console_echo, NULL);
-    irq_enable(TIMER0_IRQ, (void(*)(uint32_t, void*))funny_cursor, NULL);
+    ajouter_event(500000, funny_cursor, 0);
     while (1) {
-        wfi();
+        uint8_t c;
+        if (0 != uart_receive(UART0,&c)){
+                ajouter_event(0, console_echo_event, (uint32_t)c);
+        }
+        time_step();
+        executer_events();
     }
 }
