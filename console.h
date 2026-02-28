@@ -80,7 +80,10 @@
 #define BG_WHITE (WHITE+10)
 
 
-#define TIMER0 0x101E2000
+#define TIMER0 ((void*)0x101E2000)
+
+#define RX_IRQ 1
+#define TX_IRQ 0
 
 /*
  * Functions to move the cursor from its current position
