@@ -1,0 +1,10 @@
+By Savourat Sïan
+
+!Utiliser le cmd de ubuntu!
+
+- Pour lancer le programe executer "make run"
+
+
+Fonctionalite implementer :
+- interuption RX et TX de l'uart0
+- interuption timer0 pour changer de couleur d'affichage
