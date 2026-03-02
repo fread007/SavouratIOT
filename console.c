@@ -200,7 +200,7 @@ void console_echo(uint8_t byte){
         }
         break;
     case 1:
-        if(byte == '[') {
+        if(byte == '[' || byte == 'O') { // ESC[ ou ESCO : suite d'une commande spéciale
             state = 2;
             return;
         }
@@ -252,6 +252,7 @@ void console_echo(uint8_t byte){
         }
         ring_put(&ring_TX, '\b'); // Efface le caractère à l'écran
         ring_put(&ring_TX, ' ');
+        ring_put(&ring_TX, '\b');
         return;
     }
     
