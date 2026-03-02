@@ -10,7 +10,7 @@ static ring_t ring_TX; //ring pour stocker les caractères à envoyer à l'uart
 //******************************handler********************************
 
 bool_t change_color = 0;
-
+bool_t TX_ON = 0;
 
 
 // fonction d'interruption de l'UART0 RX qui vas stoquer tou les les caractères reçus dans une ring
@@ -26,17 +26,17 @@ void uartRX_handler() {
 // fonction d'interruption de l'UART0 TX qui vas envoyer les caractères stockés dans la ring
 void uartTX_handler() {
     if(!ring_empty(&ring_TX)) {
-        uint8_t c = ring_get(&ring_TX);
-        uart_send(UART0, c);
+        uart_send(UART0, ring_get(&ring_TX));
+        TX_ON = 0;
     }
     else{
         mmio_write32(UART0, 0x38,mmio_read32(UART0, 0x38) & ~(1 << 5)); //desactive les interuption TX sur l'uart0 si il n'y a plus de caractère à envoyer
+        TX_ON = 1;
     }
 }
 
 // fonction d'interuption uart qui renvois au bon handler en fonction du type d'interuption (RX ou TX)
 void uart_handler(uint32_t irq, uint8_t cookie) {
-    //kprintf("\nuart interrupt\n");
     switch (irq) {
         case RX_IRQ:
             uartRX_handler();
@@ -60,14 +60,8 @@ static char input_buffer[1024];
 static int buffer_pos = 0;
 static char tmp = ' '; 
 
-// fonction qui reactive les interuption TX a la fin d'une commande spesiale
-void flush_TX() {
-    irqs_disable();
-    if(!ring_empty(&ring_TX)) {
-        mmio_write32(UART0, 0x38,mmio_read32(UART0, 0x38) | (1 << 5)); //active les interuption TX sur l'uart0
-    }
-    irqs_enable();
-}
+
+
 
 //initialise la console 
 void console_init(void (*callback)(char*)) {
@@ -75,8 +69,8 @@ void console_init(void (*callback)(char*)) {
     buffer_pos = 0;
     input_buffer[0] = '\0';
     console_clear();
-    //cursor_at(0, 0);
-    //cursor_show();
+    cursor_at(0, 0);
+    cursor_show();
 }
 
 //deplace le curseur d'une position vers la gauche, droite, haut ou bas
@@ -85,28 +79,24 @@ void cursor_left(){
     ring_put(&ring_TX, '\033');
     ring_put(&ring_TX, '[');  
     ring_put(&ring_TX, 'D');
-    flush_TX();
 }
 void cursor_right(){
     // deplace le curseur d'une position vers la droite ESC[C
     ring_put(&ring_TX, '\033');
     ring_put(&ring_TX, '[');  
     ring_put(&ring_TX, 'C');  
-    flush_TX();
 }
 void cursor_down(){
     // deplace le curseur d'une position vers le bas ESC[B
     ring_put(&ring_TX, '\033');
     ring_put(&ring_TX, '[');
     ring_put(&ring_TX, 'B');
-    flush_TX();
 }
 void cursor_up(){
     // deplace le curseur d'une position vers le haut ESC[A
     ring_put(&ring_TX, '\033'); 
     ring_put(&ring_TX, '[');  
     ring_put(&ring_TX, 'A');  
-    flush_TX();
 }
 
 //deplace le curseur à une position précise (row, col)
@@ -118,7 +108,6 @@ void cursor_at(int row, int col){
     ring_put(&ring_TX, ';');  
     ring_put_int(&ring_TX, col+1); 
     ring_put(&ring_TX, 'H');   
-    flush_TX();
 }
 
 //attend la reception d'un caractère et le stocke dans c
@@ -134,7 +123,6 @@ void cursor_position(int* row, int* col){
     ring_put(&ring_TX, '[');   // ESC[ : suite d'une commande spéciale
     ring_put(&ring_TX, '6');   // ESC[6n : demande la position actuelle du curseur
     ring_put(&ring_TX, 'n');   // ESC[6n : demande la position actuelle du curseur
-    flush_TX();
 
 
     uint8_t c;
@@ -176,7 +164,6 @@ void cursor_hide(){
     ring_put(&ring_TX, '2');   
     ring_put(&ring_TX, '5');   
     ring_put(&ring_TX, 'l');  
-    flush_TX();
 }
 void cursor_show(){
     //affiche le curseur ESC[?25h
@@ -186,7 +173,6 @@ void cursor_show(){
     ring_put(&ring_TX, '2');   
     ring_put(&ring_TX, '5');   
     ring_put(&ring_TX, 'h');
-    flush_TX();
 }
 
 //change la couleur du texte ou du fond
@@ -196,7 +182,6 @@ void console_color(uint8_t color){
     ring_put(&ring_TX, '['); 
     ring_put_int(&ring_TX, color);
     ring_put(&ring_TX, 'm');   
-    flush_TX();
 }
 
 //efface l'ecran
@@ -206,7 +191,6 @@ void console_clear(){
     ring_put(&ring_TX, '['); 
     ring_put(&ring_TX, '2'); 
     ring_put(&ring_TX, 'J'); 
-    flush_TX();
 }
 
 // gère les entrées clavier et les commande spéciales
@@ -260,7 +244,6 @@ void console_echo(uint8_t byte){
     if (byte == 10 || byte == 13) { // Enter : termine la ligne et appelle le callback
         input_buffer[buffer_pos] = '\0';
         ring_put(&ring_TX, '\n'); // affiche un retour à la ligne
-        flush_TX();
         if (line_callback != NULL) {
             line_callback(input_buffer);
         }
@@ -276,8 +259,6 @@ void console_echo(uint8_t byte){
         }
         ring_put(&ring_TX, '\b'); // Efface le caractère à l'écran
         ring_put(&ring_TX, ' ');
-        ring_put(&ring_TX, '\b');
-        flush_TX();
         return;
     }
     
@@ -286,7 +267,6 @@ void console_echo(uint8_t byte){
             input_buffer[buffer_pos++] = byte;
             input_buffer[buffer_pos] = '\0';
             ring_put(&ring_TX, byte);
-            flush_TX();
         }
         return;
     }
@@ -320,20 +300,16 @@ void _start() {
     ring_TX.tail = 0;    
     
 
-    //cursor_hide();
     irqs_setup();
     irqs_enable();
-    
-    mmio_write32(UART0, 0x38, (1 << 4));    //active les interuption RX sur l'uart0
-    
+        
     irq_enable(UART0_IRQ, (void(*)(uint32_t, void*))uart_handler, NULL); //active l'interuption uart0 RX sur le VIC
 
     console_init(NULL);
-    mmio_write32(UART0, 0x38,mmio_read32(UART0, 0x38) | (1 << 5)); //active les interuption TX sur l'uart0
-
-    //mmio_write32(TIMER0, 0x00, 100000); //set la valeur du timer0
-    //mmio_write32(TIMER0, 0x08, ((1<<5)|(1<<7)| (1<<6))); //active les interuption timer, le timer0 et le mode periodique
-    //irq_enable(TIMER0_IRQ, (void(*)(uint32_t, void*))timer_handler, NULL); //active l'interuption timer0 sur le VIC
+    mmio_write32(UART0, 0x38, (1 << 4) | (1 << 5)); //active les interuption TX et RX sur l'uart0
+    mmio_write32(TIMER0, 0x00, 100000); //set la valeur du timer0
+    mmio_write32(TIMER0, 0x08, ((1<<5)|(1<<7)| (1<<6))); //active les interuption timer, le timer0 et le mode periodique
+    irq_enable(TIMER0_IRQ, (void(*)(uint32_t, void*))timer_handler, NULL); //active l'interuption timer0 sur le VIC
 
     
     //boucle incipale
@@ -346,9 +322,15 @@ void _start() {
             change_color = 0;
             funny_cursor(0);
         }
+        if(TX_ON && !ring_empty(&ring_TX)) {
+            uart_send(UART0, ring_get(&ring_TX));
+            TX_ON = 0;
+        }
         irqs_disable(); //pour ne pas avoir un nouveau caractere avant de dormire
-        if(ring_empty(&ring_RX)) {
+        if(ring_empty(&ring_RX)) { //si il n'y a pas de caractere à envoyer ou à recevoir on dort
             wfi();
+            mmio_write32(UART0, 0x38,mmio_read32(UART0, 0x38) | (1 << 5)); //active les interuption RX sur l'uart0
+            TX_ON = 1;
         }
         irqs_enable();
     }
