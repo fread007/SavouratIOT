@@ -61,18 +61,18 @@ void irq_handler(void) {
 
     //test si il s'agit d'une interuption UART0
     if (status & (1 << UART0_IRQ)) {
+        if(mmio_read32(UART0, 0x40) & (1 << 5)) { //test si c'est une interuption TX
+            mmio_write32(UART0, 0x44, mmio_read32(UART0, 0x44) | (1 << 5)); //clear l'interruption dans l'uart0
+            if (irq_handlers[UART0_IRQ].callback != NULL) { //test si elle a etais activé
+                irq_handlers[UART0_IRQ].callback(0, irq_handlers[UART0_IRQ].cookie); //appel le handler associé à l'interruption uart0 (0 pour TX)
+            }
+        }  
         if(mmio_read32(UART0, 0x40) & (1 << 4)) {   //test si c'est une interuption RX
             mmio_write32(UART0, 0x44, mmio_read32(UART0, 0x44) | (1 << 4)); //clear l'interruption dans l'uart0
             if (irq_handlers[UART0_IRQ].callback != NULL) { //test si elle a etais activé
                 irq_handlers[UART0_IRQ].callback(1, irq_handlers[UART0_IRQ].cookie); //appel le handler associé à l'interruption uart0 (1 pour RX)
             }
         }   
-        if(mmio_read32(UART0, 0x40) & (1 << 5)) { //test si c'est une interuption TX
-            mmio_write32(UART0, 0x44, mmio_read32(UART0, 0x44) | (1 << 5)); //clear l'interruption dans l'uart0
-            if (irq_handlers[UART0_IRQ].callback != NULL) { //test si elle a etais activé
-                irq_handlers[UART0_IRQ].callback(0, irq_handlers[UART0_IRQ].cookie); //appel le handler associé à l'interruption uart0 (0 pour TX)
-            }
-        }    
     }
 
     //test si il s'agit d'une interuption timer0

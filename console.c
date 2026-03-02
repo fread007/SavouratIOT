@@ -25,14 +25,7 @@ void uartRX_handler() {
 
 // fonction d'interruption de l'UART0 TX qui vas envoyer les caractères stockés dans la ring
 void uartTX_handler() {
-    if(!ring_empty(&ring_TX)) {
-        uart_send(UART0, ring_get(&ring_TX));
-        TX_ON = 0;
-    }
-    else{
-        mmio_write32(UART0, 0x38,mmio_read32(UART0, 0x38) & ~(1 << 5)); //desactive les interuption TX sur l'uart0 si il n'y a plus de caractère à envoyer
-        TX_ON = 1;
-    }
+    TX_ON = 1;
 }
 
 // fonction d'interuption uart qui renvois au bon handler en fonction du type d'interuption (RX ou TX)
@@ -310,8 +303,8 @@ void _start() {
     mmio_write32(TIMER0, 0x00, 100000); //set la valeur du timer0
     mmio_write32(TIMER0, 0x08, ((1<<5)|(1<<7)| (1<<6))); //active les interuption timer, le timer0 et le mode periodique
     irq_enable(TIMER0_IRQ, (void(*)(uint32_t, void*))timer_handler, NULL); //active l'interuption timer0 sur le VIC
+    TX_ON = 1;
 
-    
     //boucle incipale
     while (1) {
         if(!ring_empty(&ring_RX)) { 
@@ -323,14 +316,14 @@ void _start() {
             funny_cursor(0);
         }
         if(TX_ON && !ring_empty(&ring_TX)) {
+            irqs_disable(); //pour ne pas avoir un nouveau caractere à envoyer avant d'avoir fini d'envoyer le caractere en cours
             uart_send(UART0, ring_get(&ring_TX));
             TX_ON = 0;
+            irqs_enable();
         }
         irqs_disable(); //pour ne pas avoir un nouveau caractere avant de dormire
-        if(ring_empty(&ring_RX)) { //si il n'y a pas de caractere à envoyer ou à recevoir on dort
-            wfi();
-            mmio_write32(UART0, 0x38,mmio_read32(UART0, 0x38) | (1 << 5)); //active les interuption RX sur l'uart0
-            TX_ON = 1;
+        if(ring_empty(&ring_RX)&& ring_empty(&ring_TX)) { //si il n'y a pas de caractere à envoyer ou à recevoir on dort
+            wfi();            
         }
         irqs_enable();
     }
